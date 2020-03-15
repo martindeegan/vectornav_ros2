@@ -23,11 +23,8 @@ VectorNavNode::VectorNavNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("accelerometer_variance", 1e-3);
     auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
 
-    // Create publisher, health timer, and async data callback
     const auto topic = parameters_client->get_parameter<std::string>("topic");
     publisher_       = create_publisher<sensor_msgs::msg::Imu>(topic, 10);
-
-    timer_ = create_wall_timer(1s, std::bind(&VectorNavNode::check_health, this));
 
     // Find the IMU port and baudrate
     const auto valid_ports = vn::sensors::Searcher::search();
@@ -78,6 +75,7 @@ VectorNavNode::VectorNavNode(const rclcpp::NodeOptions& options)
     imu_msg_.angular_velocity_covariance[4] = gyroscope_variance;
     imu_msg_.angular_velocity_covariance[8] = gyroscope_variance;
 
+    // Use vncxx to subscribe to the async stream of data
     sensor_.writeAsyncDataOutputType(AsciiAsync::VNQMR);
     sensor_.registerAsyncPacketReceivedHandler(this, &VectorNavNode::vncxx_callback);
 }
@@ -125,14 +123,6 @@ void VectorNavNode::read_imu(Packet& packet, size_t index) {
 
     publisher_->publish(imu_msg_);
     samples_read++;
-}
-
-void VectorNavNode::check_health() {
-    RCLCPP_INFO(get_logger(), "Here");
-    if (!sensor_.isConnected()) {
-        RCLCPP_ERROR(get_logger(), "IMU not connected!");
-        rclcpp::shutdown();
-    }
 }
 
 } // namespace vn_ros
