@@ -12,7 +12,8 @@ class VectornavNode : public rclcpp::Node {
     ~VectornavNode();
 
   private:
-    void read_imu();
+    static void vncxx_callback(void* user_data, vn::protocol::uart::Packet& packet, size_t index);
+    void        read_imu(vn::protocol::uart::Packet& p, size_t index);
 
     vn::sensors::VnSensor sensor_;
 

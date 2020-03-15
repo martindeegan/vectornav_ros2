@@ -1,6 +1,13 @@
+#include <functional>
+
 #include <vn/searcher.h>
 
 #include <vectornav_node/vectornav_node.hpp>
+
+using namespace std::placeholders;
+
+using vn::protocol::uart::AsciiAsync;
+using vn::protocol::uart::Packet;
 
 namespace vn_ros {
 
@@ -34,7 +41,7 @@ VectornavNode::VectornavNode(const rclcpp::NodeOptions& options)
     RCLCPP_INFO(get_logger(), "Model Number: %s", sensor_.readModelNumber().c_str());
     RCLCPP_INFO(get_logger(), "Serial Number: %i", sensor_.readSerialNumber());
     RCLCPP_INFO(get_logger(), "Hardware Revision Number: %i", sensor_.readHardwareRevision());
-    RCLCPP_INFO(get_logger(), "Firmware Version: %i", sensor_.readFirmwareVersion().c_str());
+    RCLCPP_INFO(get_logger(), "Firmware Version: %s", sensor_.readFirmwareVersion().c_str());
 
     // Set the user desired baudrate
     const auto desired_baudrate = parameters_client->get_parameter<int>("baudrate");
@@ -67,19 +74,49 @@ VectornavNode::VectornavNode(const rclcpp::NodeOptions& options)
     // Create publisher and start sampling timer
     const auto topic = parameters_client->get_parameter<std::string>("topic");
     publisher_       = create_publisher<sensor_msgs::msg::Imu>(topic, 10);
-    timer_           = create_wall_timer(sample_period, std::bind(&VectornavNode::read_imu, this));
-    RCLCPP_INFO(get_logger(), "Sampling period: %f", sample_period.count());
+
+    sensor_.writeAsyncDataOutputType(AsciiAsync::VNQMR);
+    sensor_.registerAsyncPacketReceivedHandler(this, &VectornavNode::vncxx_callback);
 }
 
 VectornavNode::~VectornavNode() {
     sensor_.disconnect();
 }
 
-void VectornavNode::read_imu() {
+void VectornavNode::vncxx_callback(void* user_data, Packet& packet, size_t index) {
+    auto node = reinterpret_cast<vn_ros::VectornavNode*>(user_data);
+    node->read_imu(packet, index);
+}
+
+void VectornavNode::read_imu(Packet& packet, size_t index) {
     imu_msg_.header.stamp = rclcpp::Time();
 
-    // vn::sensors::YawPitchRollMagneticAccelerationAndAngularRatesRegister reg;
-    auto reg = sensor_.readYawPitchRollMagneticAccelerationAndAngularRates();
+    if (packet.type() != Packet::TYPE_ASCII) {
+        RCLCPP_ERROR(get_logger(), "Did not receive ASCII packet.");
+        return;
+    }
+
+    if (packet.determineAsciiAsyncType() != AsciiAsync::VNQMR) {
+        RCLCPP_ERROR(get_logger(), "Did not receive correct ASCII type.");
+        return;
+    }
+
+    vn::sensors::QuaternionMagneticAccelerationAndAngularRatesRegister reg;
+    packet.parseQuaternionMagneticAccelerationAndAngularRates(
+        &reg.quat, &reg.mag, &reg.accel, &reg.gyro);
+
+    imu_msg_.angular_velocity.x = reg.gyro.x;
+    imu_msg_.angular_velocity.y = reg.gyro.y;
+    imu_msg_.angular_velocity.z = reg.gyro.z;
+
+    imu_msg_.linear_acceleration.x = reg.accel.x;
+    imu_msg_.linear_acceleration.y = reg.accel.y;
+    imu_msg_.linear_acceleration.z = reg.accel.z;
+
+    imu_msg_.orientation.w = reg.quat.w;
+    imu_msg_.orientation.x = reg.quat.x;
+    imu_msg_.orientation.y = reg.quat.y;
+    imu_msg_.orientation.z = reg.quat.z;
 
     publisher_->publish(imu_msg_);
     samples_read++;
