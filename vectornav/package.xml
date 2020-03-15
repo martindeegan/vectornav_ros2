@@ -3,8 +3,8 @@
 <package format="3">
   <name>vectornav</name>
   <version>0.0.0</version>
-  <description>Vectornav IMU node</description>
-  <maintainer email="mdeegan@umich.edu">martin</maintainer>
+  <description>Compostable VectorNav IMU node</description>
+  <maintainer email="mdeegan@umich.edu">Martin Deegan</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

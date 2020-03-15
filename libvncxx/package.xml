@@ -4,7 +4,7 @@
   <name>libvncxx</name>
   <version>0.0.0</version>
   <description>libvncxx amentified</description>
-  <maintainer email="mdeegan@umich.edu">martin</maintainer>
+  <maintainer email="mdeegan@umich.edu">Martin Deegan</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
