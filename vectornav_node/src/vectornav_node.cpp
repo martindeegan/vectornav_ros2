@@ -33,6 +33,8 @@ VectornavNode::VectornavNode(const rclcpp::NodeOptions& options)
 
     RCLCPP_INFO(get_logger(), "Model Number: %s", sensor_.readModelNumber().c_str());
     RCLCPP_INFO(get_logger(), "Serial Number: %i", sensor_.readSerialNumber());
+    RCLCPP_INFO(get_logger(), "Hardware Revision Number: %i", sensor_.readHardwareRevision());
+    RCLCPP_INFO(get_logger(), "Firmware Version: %i", sensor_.readFirmwareVersion().c_str());
 
     // Set the user desired baudrate
     const auto desired_baudrate = parameters_client->get_parameter<int>("baudrate");
@@ -76,17 +78,11 @@ VectornavNode::~VectornavNode() {
 void VectornavNode::read_imu() {
     imu_msg_.header.stamp = rclcpp::Time();
 
-    const auto acceleration        = sensor_.readAccelerationMeasurements();
-    imu_msg_.linear_acceleration.x = acceleration.x;
-    imu_msg_.linear_acceleration.y = acceleration.y;
-    imu_msg_.linear_acceleration.z = acceleration.z;
-
-    const auto angular_rates    = sensor_.readAngularRateMeasurements();
-    imu_msg_.angular_velocity.x = angular_rates.x;
-    imu_msg_.angular_velocity.y = angular_rates.y;
-    imu_msg_.angular_velocity.z = angular_rates.z;
+    // vn::sensors::YawPitchRollMagneticAccelerationAndAngularRatesRegister reg;
+    auto reg = sensor_.readYawPitchRollMagneticAccelerationAndAngularRates();
 
     publisher_->publish(imu_msg_);
+    samples_read++;
 }
 
 } // namespace vn_ros
