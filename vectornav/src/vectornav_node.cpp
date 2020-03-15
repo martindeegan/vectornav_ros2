@@ -2,7 +2,7 @@
 
 #include <vn/searcher.h>
 
-#include <vectornav_node/vectornav_node.hpp>
+#include <vectornav/vectornav_node.hpp>
 
 using namespace std::placeholders;
 using namespace std::chrono_literals;

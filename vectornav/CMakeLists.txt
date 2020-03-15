@@ -35,9 +35,6 @@ target_compile_options(
                          -Wpedantic # warn if non-standard C++ is used
 )
 
-add_executable(vectornav_exec src/main.cpp)
-target_link_libraries(vectornav_exec PRIVATE vectornav_node)
-
 install(
   TARGETS vectornav_node
   EXPORT export_vectornav_node
@@ -48,9 +45,6 @@ install(
   DESTINATION include)
 
 install(DIRECTORY include/ DESTINATION include)
-
-install(TARGETS vectornav_exec RUNTIME DESTINATION lib/${PROJECT_NAME})
-
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_package()
