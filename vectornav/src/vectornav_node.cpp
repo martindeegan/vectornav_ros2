@@ -5,13 +5,14 @@
 #include <vectornav_node/vectornav_node.hpp>
 
 using namespace std::placeholders;
+using namespace std::chrono_literals;
 
 using vn::protocol::uart::AsciiAsync;
 using vn::protocol::uart::Packet;
 
 namespace vn_ros {
 
-VectornavNode::VectornavNode(const rclcpp::NodeOptions& options)
+VectorNavNode::VectorNavNode(const rclcpp::NodeOptions& options)
     : Node("vectornav_node", options), samples_read(0) {
     declare_parameter<std::string>("sensor_port", "/dev/ttyUSB0");
     declare_parameter<int>("baudrate", 921600);
@@ -21,6 +22,12 @@ VectornavNode::VectornavNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("gyroscope_variance", 1e-3);
     declare_parameter<double>("accelerometer_variance", 1e-3);
     auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
+
+    // Create publisher, health timer, and async data callback
+    const auto topic = parameters_client->get_parameter<std::string>("topic");
+    publisher_       = create_publisher<sensor_msgs::msg::Imu>(topic, 10);
+
+    timer_ = create_wall_timer(1s, std::bind(&VectorNavNode::check_health, this));
 
     // Find the IMU port and baudrate
     const auto valid_ports = vn::sensors::Searcher::search();
@@ -71,24 +78,20 @@ VectornavNode::VectornavNode(const rclcpp::NodeOptions& options)
     imu_msg_.angular_velocity_covariance[4] = gyroscope_variance;
     imu_msg_.angular_velocity_covariance[8] = gyroscope_variance;
 
-    // Create publisher and start sampling timer
-    const auto topic = parameters_client->get_parameter<std::string>("topic");
-    publisher_       = create_publisher<sensor_msgs::msg::Imu>(topic, 10);
-
     sensor_.writeAsyncDataOutputType(AsciiAsync::VNQMR);
-    sensor_.registerAsyncPacketReceivedHandler(this, &VectornavNode::vncxx_callback);
+    sensor_.registerAsyncPacketReceivedHandler(this, &VectorNavNode::vncxx_callback);
 }
 
-VectornavNode::~VectornavNode() {
+VectorNavNode::~VectorNavNode() {
     sensor_.disconnect();
 }
 
-void VectornavNode::vncxx_callback(void* user_data, Packet& packet, size_t index) {
-    auto node = reinterpret_cast<vn_ros::VectornavNode*>(user_data);
+void VectorNavNode::vncxx_callback(void* user_data, Packet& packet, size_t index) {
+    auto node = reinterpret_cast<vn_ros::VectorNavNode*>(user_data);
     node->read_imu(packet, index);
 }
 
-void VectornavNode::read_imu(Packet& packet, size_t index) {
+void VectorNavNode::read_imu(Packet& packet, size_t index) {
     imu_msg_.header.stamp = rclcpp::Time();
 
     if (packet.type() != Packet::TYPE_ASCII) {
@@ -101,25 +104,38 @@ void VectornavNode::read_imu(Packet& packet, size_t index) {
         return;
     }
 
-    vn::sensors::QuaternionMagneticAccelerationAndAngularRatesRegister reg;
-    packet.parseQuaternionMagneticAccelerationAndAngularRates(
-        &reg.quat, &reg.mag, &reg.accel, &reg.gyro);
+    vn::math::vec4f quaternion;
+    vn::math::vec3f magnetic_field;
+    vn::math::vec3f angular_rates;
+    vn::math::vec3f linear_acceleration;
+    packet.parseVNQMR(&quaternion, &magnetic_field, &linear_acceleration, &angular_rates);
 
-    imu_msg_.angular_velocity.x = reg.gyro.x;
-    imu_msg_.angular_velocity.y = reg.gyro.y;
-    imu_msg_.angular_velocity.z = reg.gyro.z;
+    imu_msg_.angular_velocity.x = angular_rates.x;
+    imu_msg_.angular_velocity.y = angular_rates.y;
+    imu_msg_.angular_velocity.z = angular_rates.z;
 
-    imu_msg_.linear_acceleration.x = reg.accel.x;
-    imu_msg_.linear_acceleration.y = reg.accel.y;
-    imu_msg_.linear_acceleration.z = reg.accel.z;
+    imu_msg_.linear_acceleration.x = linear_acceleration.x;
+    imu_msg_.linear_acceleration.y = linear_acceleration.y;
+    imu_msg_.linear_acceleration.z = linear_acceleration.z;
 
-    imu_msg_.orientation.w = reg.quat.w;
-    imu_msg_.orientation.x = reg.quat.x;
-    imu_msg_.orientation.y = reg.quat.y;
-    imu_msg_.orientation.z = reg.quat.z;
+    imu_msg_.orientation.w = quaternion.w;
+    imu_msg_.orientation.x = quaternion.x;
+    imu_msg_.orientation.y = quaternion.y;
+    imu_msg_.orientation.z = quaternion.z;
 
     publisher_->publish(imu_msg_);
     samples_read++;
 }
 
+void VectorNavNode::check_health() {
+    RCLCPP_INFO(get_logger(), "Here");
+    if (!sensor_.isConnected()) {
+        RCLCPP_ERROR(get_logger(), "IMU not connected!");
+        rclcpp::shutdown();
+    }
+}
+
 } // namespace vn_ros
+
+#include "rclcpp_components/register_node_macro.hpp"
+RCLCPP_COMPONENTS_REGISTER_NODE(vn_ros::VectorNavNode)

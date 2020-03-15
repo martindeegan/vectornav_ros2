@@ -41,8 +41,8 @@ add_library(
   src/vntime.cpp)
 
 target_include_directories(
-  vncxx PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-               "$<INSTALL_INTERFACE:include>")
+  vncxx SYSTEM PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                      "$<INSTALL_INTERFACE:include>")
 
 ament_export_include_directories(include)
 ament_export_libraries(vncxx)

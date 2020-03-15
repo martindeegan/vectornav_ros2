@@ -6,14 +6,16 @@
 
 namespace vn_ros {
 
-class VectornavNode : public rclcpp::Node {
+class VectorNavNode : public rclcpp::Node {
   public:
-    explicit VectornavNode(const rclcpp::NodeOptions& options);
-    ~VectornavNode();
+    explicit VectorNavNode(const rclcpp::NodeOptions& options);
+    ~VectorNavNode();
 
   private:
     static void vncxx_callback(void* user_data, vn::protocol::uart::Packet& packet, size_t index);
-    void        read_imu(vn::protocol::uart::Packet& p, size_t index);
+    void        read_imu(vn::protocol::uart::Packet& packet, size_t index);
+
+    void check_health();
 
     vn::sensors::VnSensor sensor_;
 
